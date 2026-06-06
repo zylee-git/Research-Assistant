@@ -1,7 +1,9 @@
 import requests
 import time
 import re
-from typing import List, Dict
+import urllib.parse
+import xml.etree.ElementTree as ET
+from typing import List, Dict, Optional
 
 
 class PaperRetriever:
@@ -140,3 +142,27 @@ class PaperRetriever:
         except Exception as e:
             print(f"检索错误: {e}")
             return []
+
+    def get_pdf_url(self, title: str) -> Optional[str]:
+        """通过arXiv API搜索论文标题，返回PDF下载链接"""
+        try:
+            query = urllib.parse.quote(title)
+            url = f"http://export.arxiv.org/api/query?search_query=ti:{query}&max_results=1&start=0"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code != 200:
+                return None
+
+            root = ET.fromstring(resp.text)
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            entry = root.find("atom:entry", ns)
+            if entry is None:
+                return None
+
+            arxiv_id = entry.find("atom:id", ns)
+            if arxiv_id is not None and arxiv_id.text:
+                # id格式: http://arxiv.org/abs/2301.12345v1
+                paper_id = arxiv_id.text.split("/abs/")[-1]
+                return f"https://arxiv.org/pdf/{paper_id}.pdf"
+            return None
+        except Exception:
+            return None

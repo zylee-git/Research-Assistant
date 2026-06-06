@@ -171,11 +171,27 @@ if search_btn and query:
         })
     st.dataframe(paper_data, use_container_width=True, hide_index=True)
 
+    # 批量获取PDF链接
+    with st.spinner("🔗 正在查找可下载的PDF链接..."):
+        pdf_urls = {}
+        for p in papers:
+            url = retriever.get_pdf_url(p["title"])
+            if url:
+                pdf_urls[p["title"]] = url
+
     with st.expander("📋 查看论文摘要"):
         for i, p in enumerate(papers, 1):
-            st.markdown(f"**{i}. {p.get('title', 'N/A')}**")
-            st.caption(f"作者: {', '.join(p.get('authors', [])[:3])} | 年份: {p.get('year', 'N/A')}")
-            st.write(p.get('abstract', '无摘要')[:500])
+            c1, c2 = st.columns([9, 1])
+            with c1:
+                st.markdown(f"**{i}. {p.get('title', 'N/A')}**")
+                st.caption(f"作者: {', '.join(p.get('authors', [])[:3])} | 年份: {p.get('year', 'N/A')}")
+                st.write(p.get('abstract', '无摘要')[:500])
+            with c2:
+                pdf = pdf_urls.get(p["title"])
+                if pdf:
+                    st.link_button("📥 PDF", pdf, help="在arXiv打开PDF")
+                else:
+                    st.caption("")
             if i < len(papers):
                 st.divider()
 
@@ -279,11 +295,17 @@ if search_btn and query:
 
     with tab4:
         for i, p in enumerate(result.get("papers", []), 1):
-            st.markdown(f"**{i}. {p.get('title', 'N/A')}**")
-            st.caption(f"作者: {', '.join(p.get('authors', [])[:3])} | 年份: {p.get('year', 'N/A')}")
-            st.write(p.get('abstract', '无摘要')[:500])
-            if p.get('url'):
-                st.caption(f"DOI: {p['url']}")
+            c1, c2 = st.columns([9, 1])
+            with c1:
+                st.markdown(f"**{i}. {p.get('title', 'N/A')}**")
+                st.caption(f"作者: {', '.join(p.get('authors', [])[:3])} | 年份: {p.get('year', 'N/A')}")
+                st.write(p.get('abstract', '无摘要')[:500])
+                if p.get('url'):
+                    st.caption(f"DOI: {p['url']}")
+            with c2:
+                pdf = pdf_urls.get(p["title"])
+                if pdf:
+                    st.link_button("📥 PDF", pdf, help="在arXiv打开PDF")
             st.divider()
 
     if code:
