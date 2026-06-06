@@ -15,6 +15,7 @@ from rich.panel import Panel
 
 from config import Config
 from agent.agent import ResearchAgent
+from tools.retriever import PaperRetriever
 
 console = Console()
 
@@ -35,8 +36,24 @@ def print_banner():
 def check_config():
     if not Config.DEEPSEEK_API_KEY:
         console.print("[red]❌ 错误: 未配置 DEEPSEEK_API_KEY[/red]")
-        console.print("[yellow]请在 .env 文件中设置: DEEPSEEK_API_KEY=your_key[/yellow]")
-        return False
+        key = Prompt.ask("[yellow]请输入 API Key（直接回车退出）[/yellow]", password=True)
+        if key:
+            env_path = Path(".env")
+            if env_path.exists():
+                content = env_path.read_text(encoding="utf-8")
+                import re
+                if "DEEPSEEK_API_KEY=" in content:
+                    content = re.sub(r'DEEPSEEK_API_KEY=.*', f'DEEPSEEK_API_KEY={key}', content)
+                else:
+                    content += f"\nDEEPSEEK_API_KEY={key}\n"
+            else:
+                content = f"DEEPSEEK_API_KEY={key}\nDEEPSEEK_BASE_URL=https://api.deepseek.com\n"
+            env_path.write_text(content, encoding="utf-8")
+            Config.DEEPSEEK_API_KEY = key
+            console.print("[green]✅ Key 已保存到 .env[/green]")
+            return True
+        else:
+            return False
     console.print("[green]✅ 配置正常[/green]")
     return True
 
@@ -73,6 +90,9 @@ def save_full_report(result: dict) -> str:
         content += f"\n### {i}. {p.get('title', 'N/A')}\n"
         content += f"- **作者**: {', '.join(p.get('authors', [])[:3])}\n"
         content += f"- **年份**: {p.get('year', 'N/A')}\n"
+        pdf = p.get('pdf_url', '')
+        if pdf:
+            content += f"- **📥 PDF**: [{pdf}]({pdf})\n"
         content += f"- **摘要**: {p.get('abstract', '')[:300]}...\n"
 
     if result.get('code'):
@@ -111,8 +131,10 @@ def display_result(result: dict):
         table.add_column("#", style="dim")
         table.add_column("标题", style="green")
         table.add_column("年份", style="blue")
+        table.add_column("PDF", style="magenta")
         for i, p in enumerate(result["papers"][:8], 1):
-            table.add_row(str(i), truncate(p["title"], 60), p.get("year", ""))
+            pdf = "📥 有" if p.get("pdf_url") else "—"
+            table.add_row(str(i), truncate(p["title"], 55), p.get("year", ""), pdf)
         console.print(table)
 
 
@@ -131,8 +153,11 @@ def save_papers_only(result: dict) -> str:
     for i, p in enumerate(result.get('papers', []), 1):
         content += f"\n## {i}. {p.get('title', 'N/A')}\n\n"
         content += f"- **作者**: {', '.join(p.get('authors', [])[:3])}\n"
-        content += f"- **年份**: {p.get('year', 'N/A')}\n\n"
-        content += f"**摘要**:\n{p.get('abstract', '无')}\n\n"
+        content += f"- **年份**: {p.get('year', 'N/A')}\n"
+        pdf = p.get('pdf_url', '')
+        if pdf:
+            content += f"- **📥 PDF**: [{pdf}]({pdf})\n"
+        content += f"\n**摘要**:\n{p.get('abstract', '无')}\n\n"
         content += "---\n"
 
     with open(save_path, 'w', encoding='utf-8') as f:
@@ -176,6 +201,13 @@ def main():
         
         try:
             result = agent.run(query, mode=mode)
+
+            # PDF链接查找
+            console.print("[dim]🔗 查找PDF下载链接...[/dim]")
+            retriever = PaperRetriever()
+            for p in result.get("papers", []):
+                p["pdf_url"] = retriever.get_pdf_url(p["title"]) or ""
+
             display_result(result)
             
             # 询问保存选项

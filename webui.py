@@ -79,12 +79,51 @@ with st.sidebar:
     st.markdown("*基于 DeepSeek V4*")
     st.divider()
 
+    # API Key 状态与输入
+    if st.session_state.get("api_key_override"):
+        key_preview = st.session_state.api_key_override[:8] + "..." + st.session_state.api_key_override[-4:]
+        st.warning(f"⏳ 会话 Key: {key_preview}")
+        if st.button("🗑 清除临时 Key"):
+            del st.session_state.api_key_override
+            st.rerun()
+
     if Config.DEEPSEEK_API_KEY:
         key_preview = Config.DEEPSEEK_API_KEY[:8] + "..." + Config.DEEPSEEK_API_KEY[-4:]
         st.success(f"✅ API 已配置 ({key_preview})")
     else:
         st.error("❌ 未配置 DEEPSEEK_API_KEY")
-        st.info("请在 .env 文件中设置 API Key")
+        api_key_input = st.text_input(
+            "输入 API Key",
+            type="password",
+            placeholder="sk-...",
+            key="api_key_field",
+        )
+        if api_key_input:
+            save_choice = st.radio(
+                "保存方式",
+                options=["permanent", "session"],
+                format_func=lambda x: "💾 永久保存到 .env" if x == "permanent" else "⏳ 仅本次会话",
+                key="save_choice",
+            )
+            if st.button("✅ 确认", use_container_width=True):
+                if save_choice == "permanent":
+                    env_path = Path(__file__).parent / ".env"
+                    env_content = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+                    if "DEEPSEEK_API_KEY=" in env_content:
+                        import re as _re
+                        env_content = _re.sub(
+                            r'DEEPSEEK_API_KEY=.*',
+                            f'DEEPSEEK_API_KEY={api_key_input}',
+                            env_content
+                        )
+                    else:
+                        env_content += f"\nDEEPSEEK_API_KEY={api_key_input}\n"
+                    env_path.write_text(env_content, encoding="utf-8")
+                    st.success("✅ 已永久保存到 .env")
+                else:
+                    st.session_state.api_key_override = api_key_input
+                    st.success("✅ Key 已临时加载（仅本次会话有效）")
+                st.rerun()
 
     st.divider()
 
@@ -130,6 +169,10 @@ with st.sidebar:
 
 
 # ===== Helpers =====
+def get_api_key():
+    override = st.session_state.get("api_key_override", "")
+    return override if override else Config.DEEPSEEK_API_KEY
+
 def save_report(result, fmt="full"):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     Path("reports").mkdir(exist_ok=True)
@@ -293,7 +336,7 @@ with tabs[0]:
             )
 
     elif step == "quick_summary" or (isinstance(step, int) and step >= 1):
-        llm = DeepSeekClient(Config.DEEPSEEK_API_KEY, Config.DEEPSEEK_BASE_URL)
+        llm = DeepSeekClient(get_api_key(), Config.DEEPSEEK_BASE_URL)
         q = st.session_state.query_text
         m = st.session_state.run_mode
 
