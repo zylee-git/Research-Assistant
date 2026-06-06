@@ -16,7 +16,7 @@
 ## 安装
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/zylee-git/Research-Assistant
 cd research-assistant
 pip install -r requirements.txt
 ```
