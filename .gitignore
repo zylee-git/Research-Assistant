@@ -9,6 +9,7 @@ venv/
 .venv/
 
 # 数据文件（下载的论文等）
+data/
 reports/
 generated_codes/
 
